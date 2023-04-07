@@ -1,17 +1,21 @@
+"""Extension entrypoint for stable-diffusion-webui"""
+
 import os
 import uuid
 import gradio as gr
-import modules.scripts as scripts
+from modules import scripts
 from modules.shared import state
 from modules.processing import process_images, fix_seed
 
 
-def map_from_to(x: int, a: int, b: int, c: int, d: int) -> float:
-    y = (x-a)/(b-a)*(d-c)+c
-    return round(y, 2)
+def map_from_to(value: int, source_min: int, source_max: int, target_min: int, target_max: int) -> float:
+    """Function to map a value from a source range to a target range"""
+    mapped: float = (value-source_min)/(source_max-source_min)*(target_max-target_min)+target_min
+    return round(mapped, 2)
 
 
 def build_prompts(original_prompt: str, start_tag: str, end_tag: str, bias_min: float, bias_max: float, image_count: int) -> list[str]:
+    """Function to build SD prompts with a linear transition from start_tag to end_tag"""
     image_count = int(image_count)
     prompts = []
     for i in range(image_count):
@@ -22,6 +26,7 @@ def build_prompts(original_prompt: str, start_tag: str, end_tag: str, bias_min: 
 
 
 def make_gif(frames, filename=None, frame_duration=100):
+    """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
     if filename is None:
         filename = str(uuid.uuid4())
 
@@ -35,6 +40,8 @@ def make_gif(frames, filename=None, frame_duration=100):
 
 
 class GifTransitionExtension(scripts.Script):
+    """Main extension class"""
+
     def __init__(self):
         super().__init__()
         self.working: bool = False
@@ -43,12 +50,15 @@ class GifTransitionExtension(scripts.Script):
         self.stored_infotexts = []
 
     def title(self):
+        """Define extension title"""
         return "GIF Transition"
 
-    def show(self, is_img2img):
+    def show(self, _is_img2img):
+        """Always show the script in txt2img and img2img tabs"""
         return scripts.AlwaysVisible
 
-    def ui(self, is_img2img):
+    def ui(self, _is_img2img):
+        """Generate gradio UI"""
         with gr.Group():
             with gr.Accordion("GIF Transition", open=False, elem_id="giftransition"):
                 with gr.Row():
@@ -66,6 +76,7 @@ class GifTransitionExtension(scripts.Script):
         return [gr_enabled, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count, gr_gif_duration]
 
     def process(self, p, gr_enabled: bool, gr_start_tag: str, gr_end_tag: str, gr_bias_min: float, gr_bias_max: float, gr_image_count: int, gr_gif_duration: int):
+        """Main process function to intercept image generation"""
         if not gr_enabled or self.working:
             return
 
@@ -89,11 +100,11 @@ class GifTransitionExtension(scripts.Script):
 
         state.job_count = len(frame_prompts)
 
-        for i in range(len(frame_prompts)):
+        for frame_prompt in frame_prompts:
             if state.interrupted:
                 return
 
-            p.prompt = frame_prompts[i]
+            p.prompt = frame_prompt
             proc = process_images(p)
 
             if state.interrupted:
@@ -113,7 +124,8 @@ class GifTransitionExtension(scripts.Script):
         self.working = False
         p.n_iter = 0
 
-    def postprocess(self, p, processed, gr_enabled: bool, gr_start_tag: str, gr_end_tag: str, gr_bias_min: float, gr_bias_max: float, gr_image_count: int, gr_gif_duration: int):
+    def postprocess(self, _p, processed, gr_enabled: bool, _gr_start_tag: str, _gr_end_tag: str, _gr_bias_min: float, _gr_bias_max: float, _gr_image_count: int, _gr_gif_duration: int):
+        """Function to collect all generated images after processing is done"""
         if not gr_enabled or self.working:
             return
         processed.images = self.stored_images

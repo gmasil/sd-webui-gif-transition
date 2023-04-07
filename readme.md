@@ -31,3 +31,11 @@ Multiple tags seperated by comma are supported as well:
 ![example](images/example2.webp "Example")
 
 Here as a start tag `cute face, blue eyes` is used, end tag is `demon, red eyes`.
+
+## Development
+
+To get better autocompletion add a `.env` file to the root of this repo and specify the location of your cloned [stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) repository:
+
+```
+PYTHONPATH="E:\\AI\\stable-diffusion-webui"
+```

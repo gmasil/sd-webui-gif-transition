@@ -1,0 +1,5 @@
+[BASIC]
+good-names=ui,p
+
+[MESSAGES CONTROL]
+disable=import-error,line-too-long,too-many-arguments

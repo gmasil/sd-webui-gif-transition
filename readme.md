@@ -1,4 +1,4 @@
-# Stable Diffusion txt2gif Transition
+# Stable Diffusion GIF Transition
 
 A [stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui) addon to generate gifs with a transition.
 

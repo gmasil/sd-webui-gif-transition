@@ -35,8 +35,9 @@ def make_gif(frames, filename=None, frame_duration=100):
         os.makedirs(outpath)
 
     first_frame, append_frames = frames[0], frames[1:]
-    first_frame.save(f"{outpath}/{filename}.gif", format="GIF", append_images=append_frames, save_all=True, duration=frame_duration, loop=0)
-    return first_frame
+    full_file_path: str = f"{outpath}/{filename}.gif"
+    first_frame.save(full_file_path, format="GIF", append_images=append_frames, save_all=True, duration=frame_duration, loop=0)
+    return full_file_path
 
 
 class GifTransitionExtension(scripts.Script):
@@ -48,6 +49,8 @@ class GifTransitionExtension(scripts.Script):
         self.stored_images = []
         self.stored_all_prompts = []
         self.stored_infotexts = []
+        self.stored_seeds = []
+        self.last_generated_gif = None
 
     def title(self):
         """Define extension title"""
@@ -89,6 +92,8 @@ class GifTransitionExtension(scripts.Script):
         self.stored_images = []
         self.stored_all_prompts = []
         self.stored_infotexts = []
+        self.stored_seeds = []
+        self.last_generated_gif = None
 
         p.batch_size = 1
         p.n_iter = 1
@@ -113,13 +118,14 @@ class GifTransitionExtension(scripts.Script):
             self.stored_images += proc.images
             self.stored_all_prompts += proc.all_prompts
             self.stored_infotexts += proc.infotexts
+            self.stored_seeds += proc.all_seeds
 
         # remove pose images of ControlNet if present
         if len(frame_prompts) * 2 == len(self.stored_images):
             del self.stored_images[1::2]
 
         frame_duration: int = int(gr_gif_duration/len(frame_prompts))
-        make_gif(self.stored_images, frame_duration=frame_duration)
+        self.last_generated_gif = [make_gif(self.stored_images, frame_duration=frame_duration)]
 
         self.working = False
         p.n_iter = 0
@@ -128,6 +134,13 @@ class GifTransitionExtension(scripts.Script):
         """Function to collect all generated images after processing is done"""
         if not gr_enabled or self.working:
             return
+
         processed.images = self.stored_images
         processed.all_prompts = self.stored_all_prompts
         processed.infotexts = self.stored_infotexts
+        processed.all_seeds = self.stored_seeds
+
+        processed.images += self.last_generated_gif
+        processed.all_prompts += ["GIF Transition Result"]
+        processed.infotexts += ["GIF Transition Result"]
+        processed.all_seeds += [-1]

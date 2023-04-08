@@ -4,7 +4,7 @@ import os
 import uuid
 import gradio as gr
 from modules import scripts
-from modules.shared import state
+from modules.shared import opts, state
 from modules.processing import process_images, fix_seed
 
 
@@ -25,14 +25,14 @@ def build_prompts(original_prompt: str, start_tag: str, end_tag: str, bias_min: 
     return prompts
 
 
-def make_gif(frames, animation_duration: int):
+def make_gif(frames, base_outpath: str | None, animation_duration: int):
     """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
     filename: str = str(uuid.uuid4())
-
-    outpath = "/output/gif-transition"
+    if not base_outpath:
+        base_outpath = opts.outdir_txt2img_samples
+    outpath: str = f"{base_outpath}/gif-transition"
     if not os.path.exists(outpath):
         os.makedirs(outpath)
-
     frame_duration: int = int(animation_duration/len(frames))
     first_frame, append_frames = frames[0], frames[1:]
     full_file_path: str = f"{outpath}/{filename}.gif"
@@ -50,6 +50,7 @@ class GifTransitionExtension(scripts.Script):
         self.stored_all_prompts = []
         self.stored_infotexts = []
         self.stored_seeds = []
+        self.outpath: str | None = None
 
     def title(self):
         """Define extension title"""
@@ -61,7 +62,7 @@ class GifTransitionExtension(scripts.Script):
 
     def create_gif(self, animation_duration):
         """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
-        return make_gif(self.stored_images, animation_duration)
+        return make_gif(self.stored_images, self.outpath, animation_duration)
 
     def ui(self, _is_img2img):
         """Generate gradio UI"""
@@ -108,6 +109,7 @@ class GifTransitionExtension(scripts.Script):
         self.stored_all_prompts = []
         self.stored_infotexts = []
         self.stored_seeds = []
+        self.outpath = p.outpath_samples
 
         p.batch_size = 1
         p.n_iter = 1

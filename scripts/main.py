@@ -137,8 +137,10 @@ class GifTransitionExtension(scripts.Script):
             self.stored_seeds += proc.all_seeds
 
         # remove pose images of ControlNet if present
-        if len(frame_prompts) * 2 == len(self.stored_images):
-            del self.stored_images[1::2]
+        if len(self.stored_images) % len(frame_prompts) == 0:
+            # found multitude of rendered images
+            nth_element: int = len(self.stored_images) // len(frame_prompts)
+            self.stored_images = self.stored_images[::nth_element]
 
         self.working = False
         p.n_iter = 0

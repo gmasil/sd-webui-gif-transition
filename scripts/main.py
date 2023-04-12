@@ -123,12 +123,14 @@ class GifTransitionExtension(scripts.Script):
 
         for frame_prompt in frame_prompts:
             if state.interrupted:
+                self.working = False
                 return
 
             p.prompt = frame_prompt
             proc = process_images(p)
 
             if state.interrupted:
+                self.working = False
                 return
 
             self.stored_images += proc.images

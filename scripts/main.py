@@ -100,7 +100,7 @@ class GifTransitionExtension(scripts.Script):
                 with gr.Row():
                     gr_image_count: int = gr.Number(label="Amount of frames", value=12, precision=0)
                     gr_animation_duration: int = gr.Number(label="Total animation duration (in ms)", value=1000, precision=0)
-                    gr_type = gr.Dropdown(choices=["webp", "gif"], label="Image type", value="webp")
+                    gr_type: str = gr.Dropdown(choices=["webp", "gif"], label="Image type", value="webp")
 
         return [gr_enabled, gr_only_recreate_gif, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count, gr_animation_duration, gr_type]
 

@@ -8,6 +8,7 @@ from modules import scripts
 from modules.shared import opts, state
 from modules.processing import process_images, fix_seed
 import scripts.webp as webp
+import scripts.ffmpeg as ffmpeg
 
 
 def map_from_to(value: int, source_min: int, source_max: int, target_min: int, target_max: int) -> float:
@@ -27,22 +28,24 @@ def build_prompts(original_prompt: str, start_tag: str, end_tag: str, bias_min: 
     return prompts
 
 
-def create_animation(frames, base_outpath: str | None, animation_duration: int, type: str):
+def create_animation(frames, base_outpath: str | None, animation_duration: int, animation_type: str):
     """Function to generate an animated GIF/webp from the given frames and saves it to a generic output directory"""
+    # strip any postfixes from animation type like "(not installed)"
+    animation_type = animation_type.split(" ")[0]
     filename: str = str(uuid.uuid4())
     if not base_outpath:
         base_outpath = opts.outdir_txt2img_samples
     outpath: str = f"{base_outpath}/gif-transition"
     if not os.path.exists(outpath):
         os.makedirs(outpath)
-    full_file_path: str = f"{outpath}/{filename}.{type}"
+    full_file_path: str = f"{outpath}/{filename}.{animation_type}"
 
-    if type == "gif":
+    if animation_type == "gif":
         # GIF
         frame_duration: int = int(animation_duration/len(frames))
         first_frame, append_frames = frames[0], frames[1:]
         first_frame.save(full_file_path, format="GIF", append_images=append_frames, save_all=True, duration=frame_duration, loop=0)
-    elif type == "webp":
+    elif animation_type == "webp":
         # WEBP
         tmp: str = os.path.join(tempfile.gettempdir(), "sd-webui-gif-transition")
         os.makedirs(tmp, exist_ok=True)
@@ -56,7 +59,22 @@ def create_animation(frames, base_outpath: str | None, animation_duration: int, 
         for saved_png in saved_pngs:
             if os.path.isfile(saved_png):
                 os.remove(saved_png)
-
+    elif animation_type == "mp4":
+        tmp: str = os.path.join(tempfile.gettempdir(), "sd-webui-gif-transition", str(uuid.uuid4()))
+        os.makedirs(tmp, exist_ok=True)
+        frame_duration: float = animation_duration/len(frames)/1000
+        saved_pngs = []
+        i: int = 0
+        for frame in frames:
+            frame_filename: str = os.path.join(tmp, f"{i:05d}.png")
+            frame.save(frame_filename)
+            saved_pngs += [frame_filename]
+            i += 1
+        ffmpeg.create_video(tmp, full_file_path, frame_duration)
+        for saved_png in saved_pngs:
+            if os.path.isfile(saved_png):
+                os.remove(saved_png)
+        os.rmdir(tmp)
     return [full_file_path]
 
 
@@ -86,6 +104,11 @@ class GifTransitionExtension(scripts.Script):
 
     def ui(self, _is_img2img):
         """Generate gradio UI"""
+
+        def get_animation_type_choices():
+            mp4_supported: bool = ffmpeg.is_ffmpeg_installed()
+            return ["webp", "gif", f"mp4{'' if mp4_supported else ' (ffmpeg not installed)'}"]
+
         with gr.Group():
             with gr.Accordion("GIF Transition", open=False, elem_id="giftransition"):
                 with gr.Row():
@@ -100,7 +123,7 @@ class GifTransitionExtension(scripts.Script):
                 with gr.Row():
                     gr_image_count: int = gr.Number(label="Amount of frames", value=12, precision=0)
                     gr_animation_duration: int = gr.Number(label="Total animation duration (in ms)", value=1000, precision=0)
-                    gr_type: str = gr.Dropdown(choices=["webp", "gif"], label="Image type", value="webp")
+                    gr_type: str = gr.Dropdown(choices=get_animation_type_choices(), label="Image type", value="webp")
 
         return [gr_enabled, gr_only_recreate_gif, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count, gr_animation_duration, gr_type]
 
@@ -181,7 +204,9 @@ class GifTransitionExtension(scripts.Script):
         processed.infotexts = self.stored_infotexts.copy()
         processed.all_seeds = self.stored_seeds.copy()
 
-        if gr_image_count > 1 and len(self.stored_images) > 0 and len(self.stored_images) == gr_image_count:
+        is_valid_animation_type: bool = " " not in gr_type
+
+        if gr_image_count > 1 and len(self.stored_images) > 0 and len(self.stored_images) == gr_image_count and is_valid_animation_type:
             processed.images += self.create_animation(gr_animation_duration, gr_type)
             processed.all_prompts += ["GIF Transition Result"]
             processed.infotexts += ["GIF Transition Result"]

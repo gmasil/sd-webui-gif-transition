@@ -29,9 +29,6 @@ def create_webp(images: list[str], animation_duration: int, output_file: str):
     webp_images: list[str] = convert_to_webp(images)
     image_timings: list[str] = set_image_timings(webp_images, animation_duration)
     webptools.webpmux_animate(input_images=image_timings, output_image=output_file, loop=0, bgcolor="255,255,255,255")
-    print(f"webp_images size = {len(webp_images)}")
     for webp_image in webp_images:
-        print(f"checking {webp_image}")
         if os.path.isfile(webp_image):
-            print(f"deleting {webp_image}")
             os.remove(webp_image)

@@ -1,3 +1,5 @@
+"""Module to wrap calls to ffmpeg"""
+
 import os
 import subprocess
 

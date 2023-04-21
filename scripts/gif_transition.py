@@ -1,112 +1,61 @@
 """Extension entrypoint for stable-diffusion-webui"""
 
-import os
-import uuid
-import tempfile
+from typing import Any, List
+
 import gradio as gr
 from modules import scripts
-from modules.shared import opts, state
-from modules.processing import process_images, fix_seed
-import scripts.webp as webp
-import scripts.ffmpeg as ffmpeg
+from modules.processing import (Processed, StableDiffusionProcessing, fix_seed,
+                                process_images)
+from modules.shared import state
 
-
-def map_from_to(value: int, source_min: int, source_max: int, target_min: int, target_max: int) -> float:
-    """Function to map a value from a source range to a target range"""
-    mapped: float = (value-source_min)/(source_max-source_min)*(target_max-target_min)+target_min
-    return round(mapped, 2)
-
-
-def build_prompts(original_prompt: str, start_tag: str, end_tag: str, bias_min: float, bias_max: float, image_count: int) -> list[str]:
-    """Function to build SD prompts with a linear transition from start_tag to end_tag"""
-    image_count = int(image_count)
-    prompts = []
-    for i in range(image_count):
-        first_bias = map_from_to((image_count-1-i) / (image_count-1), 0, 1, bias_min, bias_max)
-        second_bias = map_from_to(i / (image_count-1), 0, 1, bias_min, bias_max)
-        prompts.append(f"({start_tag}:{first_bias}), ({end_tag}:{second_bias}), {original_prompt}, ")
-    return prompts
-
-
-def create_animation(frames, base_outpath: str | None, animation_duration: int, animation_type: str):
-    """Function to generate an animated GIF/webp from the given frames and saves it to a generic output directory"""
-    # strip any postfixes from animation type like "(not installed)"
-    animation_type = animation_type.split(" ")[0]
-    filename: str = str(uuid.uuid4())
-    if not base_outpath:
-        base_outpath = opts.outdir_txt2img_samples
-    outpath: str = f"{base_outpath}/gif-transition"
-    if not os.path.exists(outpath):
-        os.makedirs(outpath)
-    full_file_path: str = f"{outpath}/{filename}.{animation_type}"
-
-    if animation_type == "gif":
-        # GIF
-        frame_duration: int = int(animation_duration/len(frames))
-        first_frame, append_frames = frames[0], frames[1:]
-        first_frame.save(full_file_path, format="GIF", append_images=append_frames, save_all=True, duration=frame_duration, loop=0)
-    elif animation_type == "webp":
-        # WEBP
-        tmp: str = os.path.join(tempfile.gettempdir(), "sd-webui-gif-transition")
-        os.makedirs(tmp, exist_ok=True)
-        # save frames as png to disk
-        saved_pngs = []
-        for frame in frames:
-            frame_filename: str = os.path.join(tmp, f"{str(uuid.uuid4())}.png")
-            frame.save(frame_filename)
-            saved_pngs += [frame_filename]
-        webp.create_webp(saved_pngs, animation_duration, full_file_path)
-        for saved_png in saved_pngs:
-            if os.path.isfile(saved_png):
-                os.remove(saved_png)
-    elif animation_type == "mp4":
-        tmp: str = os.path.join(tempfile.gettempdir(), "sd-webui-gif-transition", str(uuid.uuid4()))
-        os.makedirs(tmp, exist_ok=True)
-        frame_duration: float = animation_duration/len(frames)/1000
-        saved_pngs = []
-        i: int = 0
-        for frame in frames:
-            frame_filename: str = os.path.join(tmp, f"{i:05d}.png")
-            frame.save(frame_filename)
-            saved_pngs += [frame_filename]
-            i += 1
-        ffmpeg.create_video(tmp, full_file_path, frame_duration)
-        for saved_png in saved_pngs:
-            if os.path.isfile(saved_png):
-                os.remove(saved_png)
-        os.rmdir(tmp)
-    return [full_file_path]
+from scripts.animation_processor import AnimationProcessor
 
 
 class GifTransitionExtension(scripts.Script):
     """Main extension class"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
+        self.animation_processor: AnimationProcessor = AnimationProcessor()
         self.working: bool = False
-        self.stored_images = []
-        self.stored_all_prompts = []
-        self.stored_infotexts = []
-        self.stored_seeds = []
+        self.stored_images: List[Any] = []
+        self.stored_all_prompts: List[str] = []
+        self.stored_infotexts: List[str] = []
+        self.stored_seeds: List[int] = []
         self.outpath: str | None = None
 
-    def title(self):
+    def title(self) -> str:
         """Define extension title"""
         return "GIF Transition"
 
-    def show(self, _is_img2img):
+    def show(self, _is_img2img: bool) -> Any:
         """Always show the script in txt2img and img2img tabs"""
         return scripts.AlwaysVisible
 
-    def create_animation(self, animation_duration: int, type: str):
-        """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
-        return create_animation(self.stored_images, self.outpath, animation_duration, type)
+    def map_from_to(self, value: float, source_min: float, source_max: float, target_min: float, target_max: float) -> float:
+        """Function to map a value from a source range to a target range"""
+        mapped: float = (value-source_min)/(source_max-source_min)*(target_max-target_min)+target_min
+        return round(mapped, 2)
 
-    def ui(self, _is_img2img):
+    def build_prompts(self, original_prompt: str, start_tag: str, end_tag: str, bias_min: float, bias_max: float, image_count: int) -> List[str]:
+        """Function to build SD prompts with a linear transition from start_tag to end_tag"""
+        image_count = int(image_count)
+        prompts = []
+        for i in range(image_count):
+            first_bias = self.map_from_to((image_count-1-i) / (image_count-1), 0, 1, bias_min, bias_max)
+            second_bias = self.map_from_to(i / (image_count-1), 0, 1, bias_min, bias_max)
+            prompts.append(f"({start_tag}:{first_bias}), ({end_tag}:{second_bias}), {original_prompt}, ")
+        return prompts
+
+    def create_animation(self, animation_duration: int, animation_type: str) -> str:
+        """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
+        return self.animation_processor.create_animation(self.stored_images, self.outpath, animation_duration, animation_type)
+
+    def ui(self, _is_img2img: bool) -> List[Any]:
         """Generate gradio UI"""
 
-        def get_animation_type_choices():
-            mp4_supported: bool = ffmpeg.is_ffmpeg_installed()
+        def get_animation_type_choices() -> List[str]:
+            mp4_supported: bool = self.animation_processor.ffmpeg.is_ffmpeg_installed()
             return ["webp", "gif", f"mp4{'' if mp4_supported else ' (ffmpeg not installed)'}"]
 
         with gr.Group():
@@ -127,7 +76,7 @@ class GifTransitionExtension(scripts.Script):
 
         return [gr_enabled, gr_only_recreate_gif, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count, gr_animation_duration, gr_type]
 
-    def process(self, p, gr_enabled: bool, gr_only_recreate_gif: bool, gr_start_tag: str, gr_end_tag: str, gr_bias_min: float, gr_bias_max: float, gr_image_count: int, _gr_animation_duration: int, _gr_type: str):
+    def process(self, p: StableDiffusionProcessing, gr_enabled: bool, gr_only_recreate_gif: bool, gr_start_tag: str, gr_end_tag: str, gr_bias_min: float, gr_bias_max: float, gr_image_count: int, _gr_animation_duration: int, _gr_type: str) -> None:
         """Main process function to intercept image generation"""
 
         if not gr_enabled or self.working:
@@ -157,7 +106,7 @@ class GifTransitionExtension(scripts.Script):
         if gr_image_count <= 1:
             frame_prompts = [original_prompt]
         else:
-            frame_prompts = build_prompts(original_prompt, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count)
+            frame_prompts = self.build_prompts(original_prompt, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count)
 
         fix_seed(p)
 
@@ -189,7 +138,7 @@ class GifTransitionExtension(scripts.Script):
         self.working = False
         p.n_iter = 0
 
-    def postprocess(self, _p, processed, gr_enabled: bool, gr_only_recreate_gif: bool, _gr_start_tag: str, _gr_end_tag: str, _gr_bias_min: float, _gr_bias_max: float, gr_image_count: int, gr_animation_duration: int, gr_type: str):
+    def postprocess(self, _p: StableDiffusionProcessing, processed: Processed, gr_enabled: bool, gr_only_recreate_gif: bool, _gr_start_tag: str, _gr_end_tag: str, _gr_bias_min: float, _gr_bias_max: float, gr_image_count: int, gr_animation_duration: int, gr_type: str) -> None:
         """Function to collect all generated images after processing is done"""
 
         if self.working:
@@ -207,7 +156,7 @@ class GifTransitionExtension(scripts.Script):
         is_valid_animation_type: bool = " " not in gr_type
 
         if gr_image_count > 1 and len(self.stored_images) > 0 and len(self.stored_images) == gr_image_count and is_valid_animation_type:
-            processed.images += self.create_animation(gr_animation_duration, gr_type)
+            processed.images += [self.create_animation(gr_animation_duration, gr_type)]
             processed.all_prompts += ["GIF Transition Result"]
             processed.infotexts += ["GIF Transition Result"]
             processed.all_seeds += [-1]

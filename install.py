@@ -1,12 +1,14 @@
 """Script to install requirements on webui startup"""
+
 import os
+
 import launch
 import pkg_resources
 
-req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
+req_file: str = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 
 
-def is_installed(package_name: str, package_version: None | str = None):
+def is_installed(package_name: str, package_version: None | str = None) -> bool:
     """Check if package is installed, optionally verify correct version"""
     try:
         installed_version: str = pkg_resources.get_distribution(package_name).version

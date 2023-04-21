@@ -40,6 +40,18 @@ To get better autocompletion add a `.env` file to the root of this repo and spec
 PYTHONPATH="E:\\AI\\stable-diffusion-webui"
 ```
 
+Check types with
+
+```bash
+mypy .
+```
+
+and order imports with
+
+```bash
+isort .
+```
+
 ## License
 
 [GNU GPL v3 License](LICENSE.md)

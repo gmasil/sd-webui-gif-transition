@@ -9,6 +9,7 @@ from modules.processing import (Processed, StableDiffusionProcessing, fix_seed,
 from modules.shared import state
 
 from scripts.animation_processor import AnimationProcessor
+from scripts.prompt_builder import PromptBuilder
 
 
 class GifTransitionExtension(scripts.Script):
@@ -17,6 +18,7 @@ class GifTransitionExtension(scripts.Script):
     def __init__(self) -> None:
         super().__init__()
         self.animation_processor: AnimationProcessor = AnimationProcessor()
+        self.prompt_builder: PromptBuilder = PromptBuilder()
         self.working: bool = False
         self.stored_images: List[Any] = []
         self.stored_all_prompts: List[str] = []
@@ -31,21 +33,6 @@ class GifTransitionExtension(scripts.Script):
     def show(self, _is_img2img: bool) -> Any:
         """Always show the script in txt2img and img2img tabs"""
         return scripts.AlwaysVisible
-
-    def map_from_to(self, value: float, source_min: float, source_max: float, target_min: float, target_max: float) -> float:
-        """Function to map a value from a source range to a target range"""
-        mapped: float = (value-source_min)/(source_max-source_min)*(target_max-target_min)+target_min
-        return round(mapped, 2)
-
-    def build_prompts(self, original_prompt: str, start_tag: str, end_tag: str, bias_min: float, bias_max: float, image_count: int) -> List[str]:
-        """Function to build SD prompts with a linear transition from start_tag to end_tag"""
-        image_count = int(image_count)
-        prompts = []
-        for i in range(image_count):
-            first_bias = self.map_from_to((image_count-1-i) / (image_count-1), 0, 1, bias_min, bias_max)
-            second_bias = self.map_from_to(i / (image_count-1), 0, 1, bias_min, bias_max)
-            prompts.append(f"({start_tag}:{first_bias}), ({end_tag}:{second_bias}), {original_prompt}, ")
-        return prompts
 
     def create_animation(self, animation_duration: int, animation_type: str) -> str:
         """Function to generate an animated GIF from the given frames and saves it to a generic output directory"""
@@ -66,6 +53,7 @@ class GifTransitionExtension(scripts.Script):
                 with gr.Row():
                     gr_start_tag: str = gr.Textbox(label="Start tag", value="short hair")
                     gr_end_tag: str = gr.Textbox(label="End tag", value="long hair")
+                gr.Markdown("Hint: Your prompt is prepended with the transition tags. Select the position by adding `$transition` to your prompt at the desired position.")
                 with gr.Row():
                     gr_bias_min: float = gr.Slider(label="Bias min (default: 0.6)", value=0.6, minimum=0.0, maximum=3.0, step=0.1)
                     gr_bias_max: float = gr.Slider(label="Bias max (default: 1.4)", value=1.4, minimum=0.0, maximum=3.0, step=0.1)
@@ -106,7 +94,7 @@ class GifTransitionExtension(scripts.Script):
         if gr_image_count <= 1:
             frame_prompts = [original_prompt]
         else:
-            frame_prompts = self.build_prompts(original_prompt, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count)
+            frame_prompts = self.prompt_builder.build_prompts(original_prompt, gr_start_tag, gr_end_tag, gr_bias_min, gr_bias_max, gr_image_count)
 
         fix_seed(p)
 
